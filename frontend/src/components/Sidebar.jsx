@@ -1,11 +1,21 @@
 import React from 'react';
 import {
   LayoutDashboard, Server, Network, Layers, GitBranch,
-  FileText, Settings, LogOut, Radio, Users, Activity
+  FileText, Settings, LogOut, Radio, Users, Activity,
+  ChevronLeft, ChevronRight, X
 } from 'lucide-react';
 import { RoleBadge } from './UserManager';
 
-export default function Sidebar({ activeTab, setActiveTab, onLogout, currentUser }) {
+export default function Sidebar({
+  activeTab,
+  setActiveTab,
+  onLogout,
+  currentUser,
+  isCollapsed = false,
+  onToggleCollapse,
+  isMobileOpen = false,
+  onCloseMobile
+}) {
   const userRole = (currentUser?.role === 'administrator' || currentUser?.role === 'superadmin')
     ? 'superadmin'
     : (currentUser?.role || 'helpdesk');
@@ -37,16 +47,48 @@ export default function Sidebar({ activeTab, setActiveTab, onLogout, currentUser
   ];
 
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar ${isCollapsed ? 'collapsed' : ''} ${isMobileOpen ? 'mobile-open' : ''}`}>
       {/* Brand Header */}
       <div className="brand">
-        <div className="brand-icon-modern">
-          <Activity size={18} strokeWidth={2.4} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', minWidth: 0 }}>
+          <div
+            className="brand-icon-modern"
+            onClick={onToggleCollapse}
+            style={{ cursor: 'pointer' }}
+            title={isCollapsed ? 'Buka Sidebar' : 'FTTH CORE NMS'}
+          >
+            <Activity size={18} strokeWidth={2.4} />
+          </div>
+          {!isCollapsed && (
+            <div className="brand-text" style={{ minWidth: 0, overflow: 'hidden' }}>
+              <div className="brand-title">FTTH CORE NMS</div>
+              <div className="brand-subtitle">ISP OPERATIONS</div>
+            </div>
+          )}
         </div>
-        <div>
-          <div className="brand-title">FTTH CORE NMS</div>
-          <div className="brand-subtitle">ISP OPERATIONS</div>
-        </div>
+
+        {/* Desktop Collapse Toggle */}
+        <button
+          type="button"
+          className="sidebar-collapse-btn desktop-only"
+          onClick={onToggleCollapse}
+          title={isCollapsed ? 'Buka Sidebar (Ctrl + B)' : 'Tutup Sidebar (Tampilan Penuh)'}
+          aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        >
+          {isCollapsed ? <ChevronRight size={13} /> : <ChevronLeft size={13} />}
+        </button>
+
+        {/* Mobile Close Button */}
+        {onCloseMobile && (
+          <button
+            type="button"
+            className="sidebar-mobile-close-btn mobile-only"
+            onClick={onCloseMobile}
+            title="Tutup Menu"
+          >
+            <X size={16} />
+          </button>
+        )}
       </div>
 
       {/* Navigation Sections */}
@@ -56,8 +98,13 @@ export default function Sidebar({ activeTab, setActiveTab, onLogout, currentUser
           if (visibleItems.length === 0) return null;
 
           return (
-            <div key={section.title} style={{ marginBottom: '0.65rem' }}>
-              <div className="nav-section-title">{section.title}</div>
+            <div key={section.title} className="nav-section-wrap" style={{ marginBottom: isCollapsed ? '0.4rem' : '0.65rem' }}>
+              {!isCollapsed ? (
+                <div className="nav-section-title">{section.title}</div>
+              ) : (
+                <div className="nav-section-divider" title={section.title} />
+              )}
+
               {visibleItems.map((item) => {
                 const Icon = item.icon;
                 const isActive = activeTab === item.id;
@@ -66,9 +113,10 @@ export default function Sidebar({ activeTab, setActiveTab, onLogout, currentUser
                     key={item.id}
                     className={`nav-item ${isActive ? 'active' : ''}`}
                     onClick={() => setActiveTab(item.id)}
+                    title={isCollapsed ? `${item.label} (${section.title})` : item.label}
                   >
-                    <Icon size={15} strokeWidth={isActive ? 2.2 : 1.8} style={{ color: isActive ? '#ffffff' : 'inherit' }} />
-                    <span>{item.label}</span>
+                    <Icon size={16} strokeWidth={isActive ? 2.2 : 1.8} style={{ color: isActive ? '#ffffff' : 'inherit', flexShrink: 0 }} />
+                    {!isCollapsed && <span>{item.label}</span>}
                   </div>
                 );
               })}
@@ -80,21 +128,25 @@ export default function Sidebar({ activeTab, setActiveTab, onLogout, currentUser
       {/* Sidebar Footer */}
       <div className="sidebar-footer">
         {currentUser && (
-          <div style={{
-            background: 'var(--bg-surface-elevated)',
-            border: '1px solid var(--border-color)',
-            borderRadius: 'var(--radius-md)',
-            padding: '0.55rem 0.75rem',
-            marginBottom: '0.65rem',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '0.5rem'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0 }}>
+          <div
+            className="sidebar-user-card"
+            title={`${currentUser.username} (${userRole})`}
+            style={{
+              background: 'var(--bg-surface-elevated)',
+              border: '1px solid var(--border-color)',
+              borderRadius: 'var(--radius-md)',
+              padding: isCollapsed ? '0.45rem 0' : '0.55rem 0.75rem',
+              marginBottom: '0.65rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: isCollapsed ? 'center' : 'space-between',
+              gap: '0.5rem'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', minWidth: 0, justifyContent: isCollapsed ? 'center' : 'flex-start' }}>
               <div style={{
-                width: '26px',
-                height: '26px',
+                width: '28px',
+                height: '28px',
                 borderRadius: 'var(--radius-sm)',
                 background: 'var(--bg-card)',
                 border: '1px solid var(--border-light)',
@@ -109,13 +161,15 @@ export default function Sidebar({ activeTab, setActiveTab, onLogout, currentUser
               }}>
                 {(currentUser.username || 'AD').slice(0, 2).toUpperCase()}
               </div>
-              <div style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {currentUser.username}
+              {!isCollapsed && (
+                <div style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <div style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-main)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {currentUser.username}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
-            <RoleBadge role={userRole} />
+            {!isCollapsed && <RoleBadge role={userRole} />}
           </div>
         )}
 
@@ -124,23 +178,27 @@ export default function Sidebar({ activeTab, setActiveTab, onLogout, currentUser
             type="button"
             className="btn btn-ghost"
             onClick={onLogout}
+            title="Keluar Sesi"
             style={{
               width: '100%',
               marginBottom: '0.65rem',
               fontSize: '0.75rem',
-              padding: '0.35rem 0.6rem',
+              padding: isCollapsed ? '0.45rem 0' : '0.35rem 0.6rem',
               color: '#fb7185',
-              justifyContent: 'flex-start'
+              justifyContent: isCollapsed ? 'center' : 'flex-start'
             }}
           >
-            <LogOut size={13} />
-            <span>Keluar Sesi</span>
+            <LogOut size={14} style={{ flexShrink: 0 }} />
+            {!isCollapsed && <span>Keluar Sesi</span>}
           </button>
         )}
-        <div style={{ fontSize: '0.65rem', color: 'var(--text-dim)', textAlign: 'center', lineHeight: 1.4 }}>
-          OLT Multi-Vendor Layer v2.4<br />
-          ZTE • Huawei • Fiberhome
-        </div>
+
+        {!isCollapsed && (
+          <div style={{ fontSize: '0.65rem', color: 'var(--text-dim)', textAlign: 'center', lineHeight: 1.4 }}>
+            OLT Multi-Vendor Layer v2.4<br />
+            ZTE • Huawei • Fiberhome
+          </div>
+        )}
       </div>
     </aside>
   );

@@ -1,5 +1,8 @@
 import React from 'react';
-import { LogOut, ChevronRight, Sun, Moon, Search } from 'lucide-react';
+import {
+  LogOut, ChevronRight, Sun, Moon, Search,
+  Menu, PanelLeftClose, PanelLeftOpen
+} from 'lucide-react';
 import { RoleBadge } from './UserManager';
 
 export default function Header({
@@ -8,14 +11,52 @@ export default function Header({
   onLogout,
   theme = 'dark',
   onToggleTheme,
-  onOpenCommandPalette
+  onOpenCommandPalette,
+  isSidebarCollapsed = false,
+  onToggleSidebarCollapse,
+  onOpenMobileSidebar
 }) {
   return (
     <header className="header">
-      <div className="header-breadcrumb">
-        <span className="header-breadcrumb-root">FTTH NMS</span>
-        <ChevronRight size={13} className="header-breadcrumb-sep" />
-        <span className="header-breadcrumb-current">{activeTabName}</span>
+      <div className="header-left">
+        {/* Mobile Hamburger Drawer Trigger */}
+        {onOpenMobileSidebar && (
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm header-toggle-btn mobile-only"
+            onClick={onOpenMobileSidebar}
+            title="Buka Menu Navigasi"
+            aria-label="Open mobile navigation"
+            style={{ padding: '0.3rem', marginRight: '0.4rem' }}
+          >
+            <Menu size={18} />
+          </button>
+        )}
+
+        {/* Desktop Sidebar Collapse / Expand Toggle Button */}
+        {onToggleSidebarCollapse && (
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm header-toggle-btn desktop-only"
+            onClick={onToggleSidebarCollapse}
+            title={isSidebarCollapsed ? 'Buka Sidebar (Expand)' : 'Tutup Sidebar (Tampilan Penuh)'}
+            aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            style={{ padding: '0.28rem 0.45rem', marginRight: '0.5rem', color: 'var(--text-secondary)' }}
+          >
+            {isSidebarCollapsed ? (
+              <PanelLeftOpen size={16} />
+            ) : (
+              <PanelLeftClose size={16} />
+            )}
+          </button>
+        )}
+
+        {/* Breadcrumbs */}
+        <div className="header-breadcrumb">
+          <span className="header-breadcrumb-root hide-on-mobile">FTTH NMS</span>
+          <ChevronRight size={13} className="header-breadcrumb-sep hide-on-mobile" />
+          <span className="header-breadcrumb-current">{activeTabName}</span>
+        </div>
       </div>
 
       <div className="header-actions">
@@ -27,8 +68,8 @@ export default function Header({
             title="Buka Command Palette (Ctrl + K / Cmd + K)"
           >
             <Search size={13} />
-            <span style={{ fontSize: '0.76rem' }}>Cari cepat...</span>
-            <kbd className="kbd-shortcut">Ctrl K</kbd>
+            <span className="hide-on-mobile" style={{ fontSize: '0.76rem' }}>Cari cepat...</span>
+            <kbd className="kbd-shortcut hide-on-mobile">Ctrl K</kbd>
           </button>
         )}
 
@@ -41,17 +82,18 @@ export default function Header({
             style={{ padding: '0.26rem 0.55rem' }}
           >
             {theme === 'light' ? <Moon size={13} /> : <Sun size={13} />}
-            <span>{theme === 'light' ? 'Dark' : 'Light'}</span>
+            <span className="hide-on-mobile">{theme === 'light' ? 'Dark' : 'Light'}</span>
           </button>
         )}
 
         {/* User Profile Pill */}
         <div
+          className="header-user-pill"
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: '0.6rem',
-            paddingLeft: '0.75rem',
+            gap: '0.5rem',
+            paddingLeft: '0.65rem',
             borderLeft: '1px solid var(--border-color)'
           }}
         >
@@ -68,12 +110,13 @@ export default function Header({
               color: 'var(--text-main)',
               fontSize: '0.72rem',
               fontWeight: 700,
-              fontFamily: 'JetBrains Mono, monospace'
+              fontFamily: 'JetBrains Mono, monospace',
+              flexShrink: 0
             }}
           >
             {(currentUser?.username || 'AD').slice(0, 2).toUpperCase()}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+          <div className="hide-on-mobile" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
             <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-main)' }}>
               {currentUser?.username || 'admin'}
             </span>

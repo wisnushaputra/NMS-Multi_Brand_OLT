@@ -1,7 +1,6 @@
 import { dbQuery } from '../db/index.js';
 import { AdapterFactory } from '../adapters/adapter_factory.js';
 import { createAuditLog } from '../services/audit_service.js';
-import { syncPPPoESecret, updatePPPoEProfile, kickPPPoESession } from '../services/mikrotik_service.js';
 import { dispatchIncidentAlert } from '../services/notification_service.js';
 
 export async function getONUs(req, res) {
@@ -119,7 +118,6 @@ export async function provisionONU(req, res) {
     });
 
     let pppoeResult = null;
-    let mikrotikResult = null;
 
     if (finalPppoeUser && finalPppoePass) {
       const customHandledOmci = customCli && (customCli.includes('pon-onu-mng') || customCli.includes('ont ipconfig') || customCli.includes('set onu wan'));
@@ -145,18 +143,6 @@ export async function provisionONU(req, res) {
           success: true,
           message: 'Konfigurasi OMCI PPPoE & TR-069 telah dieksekusi melalui Custom CLI script.'
         };
-      }
-
-      // Auto-create PPPoE Secret on MikroTik Core Router with actual package profile
-      try {
-        mikrotikResult = await syncPPPoESecret({
-          username: finalPppoeUser,
-          password: finalPppoePass,
-          profile: selectedPppoeProfile,
-          comment: `ONU ${cleanSerialNumber} (${finalOnuName || device.name})`
-        });
-      } catch (mErr) {
-        console.warn('Warning: Failed to sync PPPoE Secret to MikroTik:', mErr.message);
       }
     }
 
@@ -213,8 +199,7 @@ export async function provisionONU(req, res) {
         vlan_id: profile.vlan_id,
         profile_name: profile.name,
         pppoe_profile: selectedPppoeProfile,
-        pppoe_username: finalPppoeUser,
-        mikrotik_secret_synced: !!mikrotikResult
+        pppoe_username: finalPppoeUser
       }
     });
 
@@ -239,8 +224,7 @@ export async function provisionONU(req, res) {
       message: 'Provisi ONU berhasil dilakukan',
       onu_id: insertResult.lastID,
       provisionDetails: provisionResult,
-      pppoeDetails: pppoeResult,
-      mikrotikDetails: mikrotikResult
+      pppoeDetails: pppoeResult
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -284,18 +268,6 @@ export async function pushPPPoE(req, res) {
       profileName: profile?.name || 'INTERNET',
       acsUrl: finalAcsUrl
     });
-
-    // Sync updated secret to MikroTik
-    try {
-      await syncPPPoESecret({
-        username: cleanUsername,
-        password: cleanPassword,
-        profile: onu.pppoe_profile || profile?.name || 'profile_50mbps',
-        comment: `ONU ${onu.serial_number} (${onu.onu_name || device.name})`
-      });
-    } catch (mErr) {
-      console.warn('Warning: Failed to sync updated PPPoE Secret to MikroTik:', mErr.message);
-    }
 
     await dbQuery.run(
       'UPDATE onus SET pppoe_username = ?, pppoe_password = ? WHERE onu_id = ?',
@@ -642,21 +614,7 @@ export async function replaceONU(req, res) {
       [newSN, finalOnuType, measuredRx, measuredDist, onu_id]
     );
 
-    // 5. Update comment in MikroTik BRAS secret if PPPoE is used
-    if (onu.pppoe_username) {
-      try {
-        await syncPPPoESecret({
-          username: onu.pppoe_username,
-          password: onu.pppoe_password,
-          profile: onu.pppoe_profile || 'profile_50mbps',
-          comment: `ONU ${newSN} (${onu.customer_name || onu.onu_name || device.name}) [Swapped from ${oldSN}]`
-        });
-      } catch (mErr) {
-        console.warn('Failed to update MikroTik comment after swap:', mErr.message);
-      }
-    }
-
-    // 6. Record Audit Log
+    // 5. Record Audit Log
     await createAuditLog({
       user: req.user,
       action: 'Tukar Perangkat ONU (Swap)',
@@ -828,28 +786,14 @@ export async function changeONUProfile(req, res) {
       vlanId: newProfile.vlan_id
     });
 
-    // 2. Synchronize MikroTik BRAS if PPPoE is assigned
-    let mikrotikResult = null;
-    if (onu.pppoe_username) {
-      try {
-        mikrotikResult = await updatePPPoEProfile({
-          username: onu.pppoe_username,
-          newProfile: newProfile.name,
-          kickSession: kick_session !== false
-        });
-      } catch (err) {
-        console.warn('Gagal sinkronisasi profil MikroTik:', err.message);
-      }
-    }
-
-    // 3. Update database record
+    // 2. Update database record
     await dbQuery.run(`
       UPDATE onus
       SET service_profile_id = ?, vlan_id = ?, pppoe_profile = ?
       WHERE onu_id = ?
     `, [newProfile.profile_id, newProfile.vlan_id, newProfile.name, onu.onu_id]);
 
-    // 4. Create Audit Log
+    // 3. Create Audit Log
     await createAuditLog({
       user: req.user,
       action: 'Ganti Paket Layanan ONU',
@@ -865,12 +809,11 @@ export async function changeONUProfile(req, res) {
         bandwidth: `Up ${newProfile.bandwidth_up_mbps}M / Down ${newProfile.bandwidth_down_mbps}M`,
         vlan_id: newProfile.vlan_id,
         pppoe_username: onu.pppoe_username,
-        mikrotik_synced: !!mikrotikResult,
         cliExecuted: adapterResult.cliExecuted
       }
     });
 
-    // 5. Dispatch Telegram incident alert
+    // 4. Dispatch Telegram incident alert
     dispatchIncidentAlert({
       eventType: 'PACKAGE_CHANGED',
       severity: 'INFO',
@@ -883,7 +826,6 @@ export async function changeONUProfile(req, res) {
         new_profile: newProfile.name,
         speed: `Up ${newProfile.bandwidth_up_mbps} Mbps / Down ${newProfile.bandwidth_down_mbps} Mbps`,
         vlan_id: newProfile.vlan_id,
-        mikrotik_synced: !!mikrotikResult,
         action_by: req.user?.username || 'NOC Admin'
       }
     }).catch((err) => console.warn('Telegram package change dispatch error:', err.message));
@@ -898,8 +840,7 @@ export async function changeONUProfile(req, res) {
         new_profile: newProfile.name,
         vlan_id: newProfile.vlan_id,
         cliExecuted: adapterResult.cliExecuted,
-        logs: adapterResult.logs,
-        mikrotik_synced: !!mikrotikResult
+        logs: adapterResult.logs
       }
     });
   } catch (err) {
@@ -1244,7 +1185,6 @@ export async function repushONUConfig(req, res) {
       wifi_ssid,
       wifi_password,
       acs_url,
-      kick_mikrotik_session = true,
       reboot_after_push = false
     } = req.body;
 
@@ -1291,23 +1231,6 @@ export async function repushONUConfig(req, res) {
       rebootAfterPush: Boolean(reboot_after_push)
     });
 
-    // Optionally kick active session in MikroTik BRAS & sync secret
-    let mikrotikResult = null;
-    try {
-      await syncPPPoESecret({
-        username: finalUsername,
-        password: finalPassword,
-        profile: onu.pppoe_profile || finalProfileName || 'profile_50mbps',
-        comment: `ONU ${onu.serial_number} (${onu.customer_name || onu.onu_name || device.name})`
-      });
-
-      if (kick_mikrotik_session) {
-        mikrotikResult = await kickPPPoESession({ username: finalUsername });
-      }
-    } catch (mErr) {
-      console.warn('Warning: MikroTik session kick error during repush:', mErr.message);
-    }
-
     // Update database record
     await dbQuery.run(`
       UPDATE onus
@@ -1336,7 +1259,6 @@ export async function repushONUConfig(req, res) {
         vlan_id: finalVlanId,
         service_profile: finalProfileName,
         pppoe_username: finalUsername,
-        session_kicked: Boolean(kick_mikrotik_session),
         reboot_scheduled: Boolean(reboot_after_push),
         cli_commands: repushResult.cliExecuted
       }
@@ -1354,7 +1276,6 @@ export async function repushONUConfig(req, res) {
         vlan_id: finalVlanId,
         profile_name: finalProfileName,
         pppoe_username: finalUsername,
-        session_kicked: Boolean(kick_mikrotik_session),
         action_by: req.user?.username || 'NOC Admin'
       }
     }).catch(err => console.warn('Telegram repush alert error:', err.message));
@@ -1368,11 +1289,9 @@ export async function repushONUConfig(req, res) {
       vlan_id: finalVlanId,
       profile_name: finalProfileName,
       pppoe_username: finalUsername,
-      session_kicked: Boolean(kick_mikrotik_session),
       reboot_scheduled: Boolean(reboot_after_push),
       cli_executed: repushResult.cliExecuted,
-      result: repushResult,
-      mikrotik: mikrotikResult
+      result: repushResult
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

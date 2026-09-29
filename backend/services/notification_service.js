@@ -261,7 +261,6 @@ export function formatTelegramIncidentMessage(eventType, { severity, deviceName,
 <b>Paket Baru:</b> <b>${details.new_profile || '-'}</b>
 <b>Alokasi Kecepatan:</b> <code>${details.speed || '-'}</code>
 <b>VLAN Layanan:</b> <code>VLAN ${details.vlan_id || '-'}</code>
-<b>Sinkronisasi BRAS:</b> ${details.mikrotik_synced ? '✅ PPPoE Secret Updated & Session Kicked' : 'Dilewati'}
 <b>User Eksekutor:</b> ${details.action_by || 'NOC Admin'}
 <b>Waktu:</b> ${time}
 ━━━━━━━━━━━━━━━━━━━━
@@ -290,7 +289,6 @@ export function formatTelegramIncidentMessage(eventType, { severity, deviceName,
 <b>Port/Index:</b> <code>${details.port || '-'}</code>
 <b>VLAN / Profil:</b> <code>VLAN ${details.vlan_id || '-'} (${details.profile_name || 'Default'})</code>
 <b>PPPoE Username:</b> <code>${details.pppoe_username || '-'}</code>
-<b>MikroTik Session:</b> ${details.session_kicked ? 'Kicked & Refreshed' : 'Preserved'}
 <b>User Eksekutor:</b> ${details.action_by || 'NOC Admin'}
 <b>Waktu:</b> ${time}
 ━━━━━━━━━━━━━━━━━━━━

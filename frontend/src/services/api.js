@@ -142,8 +142,3 @@ export const createUser = (data) => fetchApi('/users', { method: 'POST', body: J
 export const updateUser = (id, data) => fetchApi(`/users/${id}`, { method: 'PUT', body: JSON.stringify(data) });
 export const deleteUser = (id) => fetchApi(`/users/${id}`, { method: 'DELETE' });
 
-// MikroTik Core Router (BRAS & PPPoE)
-export const getMikroTikStatus = () => fetchApi('/mikrotik/status');
-export const getMikroTikSettings = () => fetchApi('/mikrotik/settings');
-export const saveMikroTikSettings = (data) => fetchApi('/mikrotik/settings', { method: 'POST', body: JSON.stringify(data) });
-

@@ -135,10 +135,10 @@ const PROVISION_STAGES = [
   {
     step: 5,
     id: 'bras_sync',
-    title: 'Tahap 5: Sinkronisasi MikroTik BRAS & Finalisasi',
-    desc: 'Injeksi secret PPPoE ke MikroTik RouterOS & commit database NMS',
-    badge: 'BRAS & Database',
-    cmdPreview: (d, f, p) => f?.pppoe_username ? `/ppp secret add name="${f.pppoe_username}" profile="${p?.name || 'default'}"` : 'Commit record database NMS & log audit'
+    title: 'Tahap 5: Finalisasi & Registrasi Sistem',
+    desc: 'Commit record database NMS & aktivasi telemetri monitoring',
+    badge: 'Database & Monitoring',
+    cmdPreview: (d, f, p) => 'Commit record database NMS & log audit'
   }
 ];
 
@@ -171,13 +171,6 @@ function getErrorDiagnostics(errorMessage = '', activeStep = 1) {
       title: 'Validasi Service Profile / VLAN Gagal',
       desc: 'ID VLAN atau nama Traffic Profile tidak ditemukan dalam konfigurasi template OLT.',
       action: 'Periksa menu Service Profiles dan pastikan VLAN ID sudah dibuat pada OLT fisik.'
-    };
-  }
-  if (msg.includes('mikrotik') || msg.includes('bras') || msg.includes('ppp') || msg.includes('router')) {
-    return {
-      title: 'Sinkronisasi MikroTik RouterOS Gagal',
-      desc: 'Terjadi kendala saat menghubungkan ke API MikroTik untuk mendaftarkan akun PPPoE.',
-      action: 'Periksa pengaturan kredensial MikroTik di menu Integrasi atau pastikan service API aktif.'
     };
   }
   return {
@@ -286,7 +279,7 @@ function ProvisionExecutionProgressModal({
       setActiveStep(5);
       setCompletedSteps((prev) => [...new Set([...prev, 1, 2, 3, 4])]);
       pushLog(`✓ Payload OMCI terkirim & di-acknowledge oleh ONU.`, 'success');
-      pushLog(`[STAGE 5] Sinkronisasi MikroTik BRAS dan commit data ke sistem NMS...`, 'cmd');
+      pushLog(`[STAGE 5] Registrasi dan commit data ke sistem NMS...`, 'cmd');
     }, 3100));
 
     try {
@@ -312,10 +305,6 @@ function ProvisionExecutionProgressModal({
         pushLog(`✓ OMCI PPPoE: ${res.pppoeDetails.message}`, 'success');
       }
 
-      if (res.mikrotikDetails?.action) {
-        pushLog(`✓ MikroTik BRAS: Berhasil sinkronisasi secret (${res.mikrotikDetails.username || formData.pppoe_username}) ke router.`, 'success');
-      }
-
       pushLog(`✓ SELURUH TAHAP PROVISI BERHASIL DISELESAIKAN (Total Waktu: ${((Date.now() - startTime) / 1000).toFixed(1)}s)`, 'success');
 
       const fullResult = {
@@ -335,8 +324,7 @@ function ProvisionExecutionProgressModal({
         tr069AcsUrl: formData.tr069_acs_url,
         logs: res.provisionDetails?.logs || [],
         provisionDetails: res.provisionDetails,
-        pppoeDetails: res.pppoeDetails,
-        mikrotikDetails: res.mikrotikDetails
+        pppoeDetails: res.pppoeDetails
       };
 
       setResultData(fullResult);
@@ -609,9 +597,9 @@ function ProvisionExecutionProgressModal({
                     color: '#c084fc'
                   },
                   {
-                    label: 'PPPoE & MikroTik BRAS',
+                    label: 'PPPoE Dial-up',
                     val: resultData?.pppoeUsername ? resultData.pppoeUsername : 'Mode Bridge (No PPPoE)',
-                    sub: resultData?.pppoeUsername ? 'Secret aktif di RouterOS' : 'Jaringan L2 Direct',
+                    sub: resultData?.pppoeUsername ? 'Kredensial OMCI terkonfigurasi' : 'Jaringan L2 Direct',
                     icon: Globe,
                     color: resultData?.pppoeUsername ? '#10b981' : 'var(--text-muted)'
                   }
@@ -2191,7 +2179,6 @@ function RePushConfigModal({ onu, profiles = [], onClose, onSuccess }) {
   );
   const [vlanId, setVlanId] = useState(onu.vlan_id || 100);
   const [acsUrl, setAcsUrl] = useState('http://103.176.227.233:3001/');
-  const [kickMikrotik, setKickMikrotik] = useState(true);
   const [rebootAfterPush, setRebootAfterPush] = useState(false);
 
   const [loading, setLoading] = useState(false);
@@ -2228,7 +2215,6 @@ function RePushConfigModal({ onu, profiles = [], onClose, onSuccess }) {
         vlan_id: parseInt(vlanId, 10),
         service_profile_id: parseInt(selectedProfileId, 10),
         acs_url: acsUrl.trim(),
-        kick_mikrotik_session: kickMikrotik,
         reboot_after_push: rebootAfterPush
       });
 
@@ -2365,7 +2351,6 @@ function RePushConfigModal({ onu, profiles = [], onClose, onSuccess }) {
                 <div><span style={{ color: 'var(--text-secondary)' }}>Pelanggan:</span> <span style={{ color: 'var(--text-main)', fontWeight: 600 }}>{result.customer_name || onu.customer_name || '-'}</span></div>
                 <div><span style={{ color: 'var(--text-secondary)' }}>VLAN:</span> <span style={{ color: '#10b981' }}>VLAN {result.vlan_id}</span></div>
                 <div><span style={{ color: 'var(--text-secondary)' }}>PPPoE User:</span> <code style={{ color: '#f59e0b' }}>{result.pppoe_username}</code></div>
-                <div><span style={{ color: 'var(--text-secondary)' }}>MikroTik Session:</span> <span style={{ color: result.session_kicked ? '#10b981' : 'var(--text-muted)' }}>{result.session_kicked ? '✓ Kicked & Refreshed' : 'Preserved'}</span></div>
                 <div><span style={{ color: 'var(--text-secondary)' }}>Reboot Status:</span> <span style={{ color: 'var(--text-muted)' }}>{result.reboot_scheduled ? 'Reboot Dijadwalkan' : 'Hot OMCI Applied'}</span></div>
               </div>
             </div>
@@ -2521,18 +2506,6 @@ function RePushConfigModal({ onu, profiles = [], onClose, onSuccess }) {
               <label style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', cursor: 'pointer', margin: 0 }}>
                 <input
                   type="checkbox"
-                  checked={kickMikrotik}
-                  onChange={(e) => setKickMikrotik(e.target.checked)}
-                  disabled={loading}
-                  style={{ accentColor: '#f59e0b' }}
-                />
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-main)' }}>
-                  <strong>Kick sesi aktif di MikroTik Core BRAS</strong> (Putus koneksi lama agar modem langsung dial-up sesi baru)
-                </span>
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '0.55rem', cursor: 'pointer', margin: 0 }}>
-                <input
-                  type="checkbox"
                   checked={rebootAfterPush}
                   onChange={(e) => setRebootAfterPush(e.target.checked)}
                   disabled={loading}
@@ -2609,7 +2582,6 @@ function ChangeServiceProfileModal({ onu, profiles = [], onClose, onSuccess }) {
   const [selectedProfileId, setSelectedProfileId] = useState(
     onu.service_profile_id ? String(onu.service_profile_id) : (profiles[0]?.profile_id ? String(profiles[0].profile_id) : '')
   );
-  const [kickPPPoE, setKickPPPoE] = useState(Boolean(onu.pppoe_username));
   const [reason, setReason] = useState('Upgrade/Downgrade paket sesuai permintaan');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -2638,7 +2610,6 @@ function ChangeServiceProfileModal({ onu, profiles = [], onClose, onSuccess }) {
     try {
       const res = await changeONUProfile(onu.onu_id, {
         service_profile_id: targetProfile.profile_id,
-        kick_pppoe_session: kickPPPoE,
         reason: reason.trim()
       });
       onClose();
@@ -2724,14 +2695,6 @@ function ChangeServiceProfileModal({ onu, profiles = [], onClose, onSuccess }) {
       `exit`,
       `write`
     ].filter(Boolean).join('\n');
-  }
-
-  if (onu.pppoe_username) {
-    cliPreview += `\n\n# --- [MikroTik Core Router] Update PPPoE Secret ---`;
-    cliPreview += `\n/ppp/secret/set [find name="${onu.pppoe_username}"] profile="${targetName}"`;
-    if (kickPPPoE) {
-      cliPreview += `\n/ppp/active/remove [find name="${onu.pppoe_username}"] # Re-authenticate CPE`;
-    }
   }
 
   return (
@@ -2895,34 +2858,6 @@ function ChangeServiceProfileModal({ onu, profiles = [], onClose, onSuccess }) {
             </div>
           )}
 
-          {/* Optional: Kick active PPPoE session checkbox */}
-          {onu.pppoe_username && (
-            <div style={{
-              background: 'var(--bg-input)',
-              border: '1px solid var(--border-color)',
-              borderRadius: '8px',
-              padding: '0.75rem 0.85rem',
-              marginBottom: '1rem'
-            }}>
-              <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.6rem', cursor: 'pointer', margin: 0 }}>
-                <input
-                  type="checkbox"
-                  checked={kickPPPoE}
-                  onChange={(e) => setKickPPPoE(e.target.checked)}
-                  style={{ marginTop: '0.15rem' }}
-                />
-                <div>
-                  <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-main)' }}>
-                    Putus Sesi PPPoE Aktif (Kick Session)
-                  </div>
-                  <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', lineHeight: 1.4, marginTop: '0.15rem' }}>
-                    Memutus koneksi aktif di MikroTik Core Router agar modem CPE langsung dial-up ulang dan mendapatkan queue rate-limit baru secara instan.
-                  </div>
-                </div>
-              </label>
-            </div>
-          )}
-
           {/* Reason / Notes field */}
           <div style={{ marginBottom: '1rem' }}>
             <label style={{ display: 'block', fontSize: '0.8rem', color: '#94a3b8', marginBottom: '0.35rem' }}>
@@ -2956,7 +2891,7 @@ function ChangeServiceProfileModal({ onu, profiles = [], onClose, onSuccess }) {
               }}
             >
               <Terminal size={13} />
-              {showCLI ? 'Sembunyikan OLT & BRAS CLI Plan' : 'Lihat OLT & BRAS CLI Execution Plan'}
+              {showCLI ? 'Sembunyikan OLT CLI Plan' : 'Lihat OLT CLI Execution Plan'}
             </button>
             {showCLI && (
               <pre style={{
@@ -2992,7 +2927,7 @@ function ChangeServiceProfileModal({ onu, profiles = [], onClose, onSuccess }) {
           }}>
             <Shield size={16} style={{ flexShrink: 0, marginTop: '2px', color: '#38bdf8' }} />
             <div>
-              Override paket dilakukan secara <strong>in-place</strong> pada index ONU yang sama tanpa unregister atau reboot fisik. Bandwidth T-CONT & profile MikroTik akan terupdate otomatis.
+              Override paket dilakukan secara <strong>in-place</strong> pada index ONU yang sama tanpa unregister atau reboot fisik. Bandwidth T-CONT & konfigurasi traffic profile OLT akan terupdate otomatis.
             </div>
           </div>
         </div>
@@ -5439,9 +5374,9 @@ function ProvisionWizardModal({ devices, profiles, onClose, onSuccess }) {
                 </div>
               </div>
               <div style={{ marginTop: '0.45rem', fontSize: '0.72rem', color: '#94a3b8', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.3rem' }}>
-                <span>Sinkronisasi MikroTik: Secret otomatis dibuat dengan profil <code>{selectedProfile?.name || 'profile_50mbps'}</code></span>
+                <span>Kredensial PPPoE akan disuntikkan via OMCI / TR-069 ke modem pelanggan</span>
                 {form.pppoe_username && (
-                  <span style={{ color: '#34d399' }}>✓ Kredensial siap disuntikkan ke TR-069 & MikroTik</span>
+                  <span style={{ color: '#34d399' }}>✓ Kredensial siap dikonfigurasi</span>
                 )}
               </div>
             </div>
@@ -5667,7 +5602,7 @@ function ProvisionWizardModal({ devices, profiles, onClose, onSuccess }) {
                 </div>
               </div>
 
-              {/* Card 4: Kredensial PPPoE & MikroTik BRAS */}
+              {/* Card 4: Kredensial PPPoE & Layanan */}
               <div style={{
                 background: 'var(--bg-secondary)',
                 border: '1px solid var(--border-color)',
@@ -5677,7 +5612,7 @@ function ProvisionWizardModal({ devices, profiles, onClose, onSuccess }) {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', marginBottom: '0.55rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.4rem' }}>
                   <Key size={14} color="#f59e0b" />
                   <span style={{ fontSize: '0.76rem', fontWeight: 700, color: 'var(--text-main)', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
-                    4. Kredensial & MikroTik BRAS
+                    4. Kredensial PPPoE & Layanan
                   </span>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', fontSize: '0.78rem' }}>
@@ -5706,9 +5641,9 @@ function ProvisionWizardModal({ devices, profiles, onClose, onSuccess }) {
                     </div>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>Router BRAS Sync:</span>
+                    <span style={{ color: 'var(--text-muted)' }}>Mode Layanan:</span>
                     <span style={{ color: form.pppoe_username ? '#38bdf8' : '#9ca3af', fontWeight: 600 }}>
-                      {form.pppoe_username ? `Auto-create (Profil: ${selectedProfile?.name || 'profile_50mbps'})` : 'Dilewati'}
+                      {form.pppoe_username ? `PPPoE Route (Profil: ${selectedProfile?.name || 'profile_50mbps'})` : 'Bridge Mode'}
                     </span>
                   </div>
                 </div>
@@ -5729,17 +5664,12 @@ function ProvisionWizardModal({ devices, profiles, onClose, onSuccess }) {
               </div>
               <div style={{ color: '#64748b', lineHeight: 1.6, display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
                 {isCustomCli ? (
-                  <div><span style={{ color: '#fbbf24' }}>[1/4] OLT Adapter:</span> Eksekusi <strong>{customCliText.split('\n').filter(l => l.trim()).length} baris Custom CLI script</strong> langsung ke {selectedDevice?.name || 'OLT'} via SSH</div>
+                  <div><span style={{ color: '#fbbf24' }}>[1/3] OLT Adapter:</span> Eksekusi <strong>{customCliText.split('\n').filter(l => l.trim()).length} baris Custom CLI script</strong> langsung ke {selectedDevice?.name || 'OLT'} via SSH</div>
                 ) : (
-                  <div><span style={{ color: '#fbbf24' }}>[1/4] OLT Adapter:</span> Eksekusi bind SN <code>{form.serial_number}</code> ke PON Port <code>1/{form.card_slot || 1}/{form.pon_port_id}</code> ({selectedDevice?.vendor} CLI)</div>
+                  <div><span style={{ color: '#fbbf24' }}>[1/3] OLT Adapter:</span> Eksekusi bind SN <code>{form.serial_number}</code> ke PON Port <code>1/{form.card_slot || 1}/{form.pon_port_id}</code> ({selectedDevice?.vendor} CLI)</div>
                 )}
-                <div><span style={{ color: '#38bdf8' }}>[2/4] OMCI Config:</span> {isCustomCli ? 'Diterapkan sesuai script custom atau profile paket' : `Tagging VLAN ${selectedProfile?.vlan_id} & aktivasi service profile ${selectedProfile?.name}`}</div>
-                {form.pppoe_username ? (
-                  <div><span style={{ color: '#c084fc' }}>[3/4] MikroTik BRAS:</span> Sinkronisasi akun <code>/ppp/secret add name="{form.pppoe_username}" profile="{selectedProfile?.name || 'profile_50mbps'}"</code></div>
-                ) : (
-                  <div><span style={{ color: '#64748b' }}>[3/4] MikroTik BRAS:</span> Dilewati (Kredensial PPPoE tidak diset)</div>
-                )}
-                <div><span style={{ color: '#34d399' }}>[4/4] NMS Core:</span> Registrasi ONU ke database, catat audit log, dan aktifkan telemetri poller</div>
+                <div><span style={{ color: '#38bdf8' }}>[2/3] OMCI Config:</span> {isCustomCli ? 'Diterapkan sesuai script custom atau profile paket' : `Tagging VLAN ${selectedProfile?.vlan_id} & aktivasi service profile ${selectedProfile?.name}`}</div>
+                <div><span style={{ color: '#34d399' }}>[3/3] NMS Core:</span> Registrasi ONU ke database, catat audit log, dan aktifkan telemetri poller</div>
               </div>
             </div>
           </div>
@@ -5842,6 +5772,16 @@ export default function ONUProvisioner({ devices = [], profiles = [], onRefresh,
   const [filterPonPort, setFilterPonPort] = useState('all');
   const [filterProfile, setFilterProfile] = useState('all');
   const [loopIncidents, setLoopIncidents] = useState([]);
+  const [isOLTCardSectionOpen, setIsOLTCardSectionOpen] = useState(() => {
+    return localStorage.getItem('nms_olt_cards_open') !== 'false';
+  });
+
+  const toggleOLTCardSection = () => {
+    setIsOLTCardSectionOpen((prev) => {
+      localStorage.setItem('nms_olt_cards_open', String(!prev));
+      return !prev;
+    });
+  };
 
   const [modal, setModal] = useState(null); // null | 'provision' | { type:'pppoe',onu } | { type:'status', data } | { type:'delete',onu } | { type:'result', data } | { type:'replace', onu } | { type:'reboot', onu } | { type:'change-profile', onu } | { type:'loop-protection' }
   const [loadingStatusId, setLoadingStatusId] = useState(null);
@@ -6025,11 +5965,11 @@ export default function ONUProvisioner({ devices = [], profiles = [], onRefresh,
       <ToastContainer toasts={toasts} onRemove={remove} />
 
       {/* Page header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
         <div>
           <h2 style={{ fontSize: '1.25rem', fontWeight: 700, margin: 0, letterSpacing: '-0.02em', color: 'var(--text-main)' }}>Provisi ONU</h2>
         </div>
-        <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
           <button
             className={`btn ${loopIncidents.length > 0 ? 'btn-danger' : 'btn-secondary'} btn-sm`}
             onClick={() => setModal({ type: 'loop-protection' })}
@@ -6069,7 +6009,8 @@ export default function ONUProvisioner({ devices = [], profiles = [], onRefresh,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            gap: '1rem'
+            gap: '1rem',
+            flexWrap: 'wrap'
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
@@ -6183,7 +6124,7 @@ export default function ONUProvisioner({ devices = [], profiles = [], onRefresh,
 
       {/* OLT Hardware Gateway Selection Cards */}
       <div style={{ marginBottom: '1.1rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem', flexWrap: 'wrap', gap: '0.5rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <Server size={14} style={{ color: 'var(--primary-light)' }} />
             <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-main)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
@@ -6193,25 +6134,50 @@ export default function ONUProvisioner({ devices = [], profiles = [], onRefresh,
               ({devices.length} Unit Terpasang)
             </span>
           </div>
-          {(filterDevice !== 'all' || filterCardSlot !== 'all' || filterPonPort !== 'all' || filterProfile !== 'all') && (
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            {(filterDevice !== 'all' || filterCardSlot !== 'all' || filterPonPort !== 'all' || filterProfile !== 'all') && (
+              <button
+                type="button"
+                onClick={() => {
+                  setFilterDevice('all');
+                  setFilterCardSlot('all');
+                  setFilterPonPort('all');
+                  setFilterProfile('all');
+                }}
+                className="btn btn-ghost btn-sm"
+                style={{ fontSize: '0.74rem', color: 'var(--primary-light)', padding: '2px 6px' }}
+              >
+                <RotateCcw size={11} style={{ marginRight: '4px' }} />
+                Reset ke Semua OLT
+              </button>
+            )}
+
+            {/* Buka / Tutup Card Filter Button */}
             <button
               type="button"
-              onClick={() => {
-                setFilterDevice('all');
-                setFilterCardSlot('all');
-                setFilterPonPort('all');
-                setFilterProfile('all');
-              }}
-              className="btn btn-ghost btn-sm"
-              style={{ fontSize: '0.74rem', color: 'var(--primary-light)', padding: '2px 6px' }}
+              onClick={toggleOLTCardSection}
+              className="btn btn-secondary btn-sm"
+              style={{ fontSize: '0.72rem', padding: '0.2rem 0.6rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}
+              title={isOLTCardSectionOpen ? 'Tutup Card Filter OLT (Hemat Ruang)' : 'Buka Card Filter OLT'}
             >
-              <RotateCcw size={11} style={{ marginRight: '4px' }} />
-              Reset ke Semua OLT
+              {isOLTCardSectionOpen ? (
+                <>
+                  <ChevronUp size={13} />
+                  <span>Tutup Card</span>
+                </>
+              ) : (
+                <>
+                  <ChevronDown size={13} />
+                  <span>Buka Card</span>
+                </>
+              )}
             </button>
-          )}
+          </div>
         </div>
 
-        {/* Card Grid for OLT Devices */}
+        {/* Collapsible Card Grid or Compact Summary */}
+        {isOLTCardSectionOpen ? (
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))',
@@ -6389,6 +6355,52 @@ export default function ONUProvisioner({ devices = [], profiles = [], onRefresh,
             );
           })}
         </div>
+      ) : (
+        /* Compact summary strip when card grid is collapsed */
+        <div
+          onClick={toggleOLTCardSection}
+          style={{
+            padding: '0.45rem 0.85rem',
+            borderRadius: 'var(--radius-md)',
+            background: 'var(--bg-surface-elevated)',
+            border: '1px solid var(--border-color)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            cursor: 'pointer',
+            fontSize: '0.75rem',
+            color: 'var(--text-secondary)',
+            transition: 'background 0.15s ease'
+          }}
+          title="Klik untuk membuka kembali Card Filter OLT"
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+            <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>Status Filter:</span>
+            <span style={{ fontWeight: 600, color: 'var(--primary-light)' }}>
+              {filterDevice === 'all'
+                ? '🌐 Semua OLT (Global Pool)'
+                : `🎯 ${devices.find((d) => String(d.device_id) === filterDevice)?.name || 'OLT Terpilih'}`}
+            </span>
+            {filterCardSlot !== 'all' && (
+              <span style={{ background: 'rgba(37,99,235,0.15)', color: 'var(--primary-light)', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>
+                Slot {filterCardSlot}
+              </span>
+            )}
+            {filterPonPort !== 'all' && (
+              <span style={{ background: 'rgba(16,185,129,0.15)', color: 'var(--success)', padding: '1px 6px', borderRadius: '4px', fontWeight: 600 }}>
+                Port {filterPonPort}
+              </span>
+            )}
+            <span style={{ color: 'var(--text-dim)', fontSize: '0.72rem' }}>
+              ({filteredONUs.length} ONU Ditampilkan)
+            </span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', color: 'var(--primary-light)', fontSize: '0.72rem', fontWeight: 500 }}>
+            <span>Buka Card</span>
+            <ChevronDown size={13} />
+          </div>
+        </div>
+      )}
       </div>
 
       {/* Search + Sub-Filters Panel */}

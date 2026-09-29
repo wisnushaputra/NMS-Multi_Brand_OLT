@@ -908,19 +908,11 @@ Copyright (c) 2011-2024 by ZTE Corporation`;
       `  security-mgmt 212 state enable mode forward protocol web`,
       `  tr069-mgmt 1 state unlock`,
       `  tr069-mgmt 1 acs ${acsUrl}`,
+      ...(rebootAfterPush ? [`  reboot`, `yes`] : []),
       `exit`,
       `exit`,
       `write`
     ];
-
-    if (rebootAfterPush) {
-      cliCommands.push(`configure terminal`);
-      cliCommands.push(`pon-onu-mng gpon-onu_1/${card}/${port}:${index}`);
-      cliCommands.push(`  reboot`);
-      cliCommands.push(`yes`);
-      cliCommands.push(`exit`);
-      cliCommands.push(`exit`);
-    }
 
     try {
       const sshRes = await executeSSHCommands(this.device, cliCommands, 25000);

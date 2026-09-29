@@ -60,8 +60,6 @@ export async function initDatabase() {
 
   await dbQuery.exec(schemaSql);
   await seedData();
-  const { runMikroTikMigration } = await import('./migrate_mikrotik.js');
-  await runMikroTikMigration();
   const { runRepushConfigMigration } = await import('./migrate_repush_config.js');
   await runRepushConfigMigration();
   const { runLoopProtectionMigration } = await import('./migrate_loop_protection.js');

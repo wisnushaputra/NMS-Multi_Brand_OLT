@@ -11,29 +11,12 @@ import {
   syncGenieACS,
   rebootGenieACSCPE,
   sendTestNotification,
-  simulateIncidentAlert,
-  getMikroTikSettings,
-  saveMikroTikSettings,
-  getMikroTikStatus
 } from '../services/api';
 
 export default function IntegrationsView() {
-  const [activeSubTab, setActiveSubTab] = useState('mikrotik'); // 'mikrotik' | 'genieacs' | 'telegram' | 'webhook' | 'simulator'
+  const [activeSubTab, setActiveSubTab] = useState('genieacs'); // 'genieacs' | 'telegram' | 'webhook' | 'simulator'
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
-
-  // MikroTik BRAS State
-  const [mikrotikSettings, setMikrotikSettings] = useState({
-    host: '10.10.10.1',
-    port: 8728,
-    username: 'admin',
-    password: '',
-    use_tls: false,
-    default_profile: 'profile_50mbps'
-  });
-  const [mikrotikStatus, setMikrotikStatus] = useState(null);
-  const [isTestingMikrotik, setIsTestingMikrotik] = useState(false);
-  const [isSavingMikrotik, setIsSavingMikrotik] = useState(false);
 
   // Settings State
   const [settings, setSettings] = useState({
@@ -109,62 +92,11 @@ export default function IntegrationsView() {
 
   useEffect(() => {
     loadSettings();
-    loadMikroTik();
   }, []);
 
   const showToast = (type, message) => {
     setToast({ type, message });
     setTimeout(() => setToast(null), 4000);
-  };
-
-  const loadMikroTik = async () => {
-    try {
-      const [sets, status] = await Promise.all([
-        getMikroTikSettings(),
-        getMikroTikStatus()
-      ]);
-      const s = sets.data || sets;
-      const st = status.data || status;
-      setMikrotikSettings({
-        host: s.mikrotik_host || s.host || '10.10.10.1',
-        port: parseInt(s.mikrotik_port || s.port) || 8728,
-        username: s.mikrotik_user || s.username || 'admin',
-        password: '',
-        use_tls: s.mikrotik_use_tls === 'true' || s.mikrotik_use_tls === true || s.use_tls === true,
-        default_profile: s.mikrotik_default_profile || s.default_profile || 'profile_50mbps'
-      });
-      setMikrotikStatus(st);
-    } catch (err) {
-      console.error('Failed to load MikroTik info:', err);
-    }
-  };
-
-  const handleSaveMikroTikSettings = async (e) => {
-    if (e) e.preventDefault();
-    setIsSavingMikrotik(true);
-    try {
-      await saveMikroTikSettings(mikrotikSettings);
-      showToast('success', 'Setelan MikroTik Core Router BRAS berhasil disimpan.');
-      loadMikroTik();
-    } catch (err) {
-      showToast('error', `Gagal menyimpan setelan MikroTik: ${err.message}`);
-    } finally {
-      setIsSavingMikrotik(false);
-    }
-  };
-
-  const handleTestMikroTik = async () => {
-    setIsTestingMikrotik(true);
-    try {
-      const res = await getMikroTikStatus();
-      const st = res.data || res;
-      setMikrotikStatus(st);
-      showToast('success', `Koneksi MikroTik ${st.board || st.board_model || 'RouterOS'} terverifikasi.`);
-    } catch (err) {
-      showToast('error', `Uji koneksi gagal: ${err.message}`);
-    } finally {
-      setIsTestingMikrotik(false);
-    }
   };
 
   const loadSettings = async () => {
@@ -289,7 +221,6 @@ export default function IntegrationsView() {
       {/* Subtabs Navigation */}
       <div style={{ display: 'flex', gap: '0.4rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem', flexWrap: 'wrap' }}>
         {[
-          { id: 'mikrotik', label: 'MikroTik Core Router (BRAS)', icon: Globe },
           { id: 'genieacs', label: 'GenieACS TR-069', icon: Server },
           { id: 'telegram', label: 'Bot Notifikasi Telegram', icon: MessageSquare },
           { id: 'webhook', label: 'Webhook & Incident Triggers', icon: Bell },
@@ -323,203 +254,7 @@ export default function IntegrationsView() {
         })}
       </div>
 
-      {/* SUBTAB: MIKROTIK CORE ROUTER BRAS */}
-      {activeSubTab === 'mikrotik' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-          {/* Status & Telemetry Cards */}
-          <div className="card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.85rem', flexWrap: 'wrap', gap: '0.75rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <div style={{ width: '38px', height: '38px', borderRadius: '8px', background: 'rgba(56,189,248,0.1)', border: '1px solid rgba(56,189,248,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Globe size={20} color="#38bdf8" />
-                </div>
-                <div>
-                  <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-main)' }}>
-                    MikroTik RouterOS BRAS & PPPoE Server
-                  </h3>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                    Sinkronisasi otomatis akun PPPoE Secret pelanggan pada Router MikroTik BRAS
-                  </div>
-                </div>
-              </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                <div style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '0.4rem',
-                  padding: '0.3rem 0.75rem',
-                  borderRadius: '9999px',
-                  background: mikrotikStatus?.connected ? 'rgba(16,185,129,0.12)' : 'rgba(245,158,11,0.12)',
-                  border: `1px solid ${mikrotikStatus?.connected ? 'rgba(16,185,129,0.25)' : 'rgba(245,158,11,0.25)'}`,
-                  color: mikrotikStatus?.connected ? '#34d399' : '#fbbf24',
-                  fontSize: '0.78rem',
-                  fontWeight: 600
-                }}>
-                  <span className="pulse-dot" style={{ background: mikrotikStatus?.connected ? '#34d399' : '#fbbf24' }} />
-                  {mikrotikStatus?.connected ? 'Terhubung (REST API / BRAS)' : 'Simulasi BRAS Aktif'}
-                </div>
-                <button
-                  className="btn btn-secondary"
-                  style={{ fontSize: '0.78rem', padding: '0.35rem 0.75rem' }}
-                  onClick={handleTestMikroTik}
-                  disabled={isTestingMikrotik}
-                >
-                  <RefreshCw size={13} className={isTestingMikrotik ? 'spin-animate' : ''} />
-                  {isTestingMikrotik ? 'Menguji...' : 'Uji Koneksi'}
-                </button>
-              </div>
-            </div>
-
-            {/* Hardware & Session Metrics */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.85rem' }}>
-              <div style={{ padding: '0.85rem', background: 'var(--bg-surface-elevated)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Model Hardware</div>
-                <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-main)' }}>
-                  {mikrotikStatus?.board || mikrotikStatus?.board_model || 'MikroTik CCR2004-16G-2S+'}
-                </div>
-                <div style={{ fontSize: '0.7rem', color: '#38bdf8', marginTop: '0.2rem' }}>
-                  {mikrotikStatus?.version || 'RouterOS v7.14'}
-                </div>
-              </div>
-
-              <div style={{ padding: '0.85rem', background: 'var(--bg-surface-elevated)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>CPU Load</div>
-                <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#10b981' }}>
-                  {mikrotikStatus?.cpuLoad || mikrotikStatus?.cpu_load || '14%'}
-                </div>
-                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
-                  Multi-core ARM64
-                </div>
-              </div>
-
-              <div style={{ padding: '0.85rem', background: 'var(--bg-surface-elevated)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>RAM Bebas / Total</div>
-                <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-main)' }}>
-                  {mikrotikStatus?.freeMemory || mikrotikStatus?.free_memory || '3.4 GB'} / {mikrotikStatus?.totalMemory || mikrotikStatus?.total_memory || '4.0 GB'}
-                </div>
-                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
-                  Uptime: {mikrotikStatus?.uptime || '18d 6h 40m'}
-                </div>
-              </div>
-
-              <div style={{ padding: '0.85rem', background: 'var(--bg-surface-elevated)', borderRadius: '8px', border: '1px solid var(--border-color)' }}>
-                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Sesi PPPoE Aktif</div>
-                <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--primary)' }}>
-                  {mikrotikStatus?.activeSessionsCount ?? mikrotikStatus?.active_pppoe_count ?? 8} <span style={{ fontSize: '0.75rem', fontWeight: 500, color: 'var(--text-muted)' }}>pelanggan</span>
-                </div>
-                <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
-                  Dynamic Simple Queues
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Configuration Form */}
-          <div className="card">
-            <h4 style={{ fontSize: '0.92rem', fontWeight: 700, marginBottom: '1rem', color: 'var(--text-main)' }}>
-              Konfigurasi API RouterOS & Profil Billing
-            </h4>
-            <form onSubmit={handleSaveMikroTikSettings}>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
-                <div className="form-group">
-                  <label>Host / IP Address Router BRAS</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={mikrotikSettings.host || ''}
-                    onChange={(e) => setMikrotikSettings({ ...mikrotikSettings, host: e.target.value })}
-                    placeholder="10.10.10.1"
-                    required
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>API Port (RouterOS REST / Socket)</label>
-                  <input
-                    type="number"
-                    className="form-input"
-                    value={mikrotikSettings.port || 8728}
-                    onChange={(e) => setMikrotikSettings({ ...mikrotikSettings, port: parseInt(e.target.value) || 8728 })}
-                    placeholder="8728"
-                    required
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>API Username</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={mikrotikSettings.username || ''}
-                    onChange={(e) => setMikrotikSettings({ ...mikrotikSettings, username: e.target.value })}
-                    placeholder="admin"
-                    required
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>API Password</label>
-                  <input
-                    type="password"
-                    className="form-input"
-                    value={mikrotikSettings.password || ''}
-                    onChange={(e) => setMikrotikSettings({ ...mikrotikSettings, password: e.target.value })}
-                    placeholder="••••••••"
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label>Profil PPPoE Default (Aktif)</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={mikrotikSettings.default_profile || ''}
-                    onChange={(e) => setMikrotikSettings({ ...mikrotikSettings, default_profile: e.target.value })}
-                    placeholder="profile_50mbps"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '1.25rem' }}>
-                <input
-                  type="checkbox"
-                  id="mikrotik_tls"
-                  checked={mikrotikSettings.use_tls || false}
-                  onChange={(e) => setMikrotikSettings({ ...mikrotikSettings, use_tls: e.target.checked })}
-                  style={{ width: '16px', height: '16px', cursor: 'pointer' }}
-                />
-                <label htmlFor="mikrotik_tls" style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', cursor: 'pointer', margin: 0 }}>
-                  Gunakan Koneksi Aman SSL/TLS (HTTPS Port 443 / API-SSL 8729)
-                </label>
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                <button type="submit" className="btn btn-primary" disabled={isSavingMikrotik}>
-                  <Save size={14} />
-                  {isSavingMikrotik ? 'Menyimpan...' : 'Simpan Konfigurasi MikroTik'}
-                </button>
-              </div>
-            </form>
-          </div>
-
-          {/* Architecture Explainer Card */}
-          <div className="card" style={{ background: 'var(--bg-surface-elevated)', border: '1px solid var(--border-color)' }}>
-            <h4 style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-main)', marginBottom: '0.6rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <Terminal size={14} /> Mekanisme Sinkronisasi PPPoE Otomatis NMS & MikroTik BRAS
-            </h4>
-            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-              <p style={{ marginBottom: '0.5rem' }}>
-                1. <strong>Provisi Otomatis</strong>: Setiap ONU yang didaftarkan di NMS secara otomatis dibuatkan akun PPPoE Secret di router MikroTik BRAS dengan profil layanan yang dipilih.
-              </p>
-              <p style={{ margin: 0 }}>
-                2. <strong>Swap Perangkat Otomatis</strong>: Saat terjadi penggantian modem pelanggan (Swap Wizard), NMS mempertahankan kredensial PPPoE dan menyinkronkan status ke MikroTik tanpa gangguan konfigurasi router.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* SUBTAB 1: GENIEACS TR-069 */}
       {activeSubTab === 'genieacs' && (

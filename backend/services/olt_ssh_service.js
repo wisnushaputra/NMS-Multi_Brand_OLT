@@ -56,7 +56,13 @@ export async function executeSSHCommands(device, commands = [], timeoutMs = 8000
         let output = '';
 
         stream.on('data', (data) => {
-          output += data.toString('utf8');
+          const str = data.toString('utf8');
+          output += str;
+
+          // Safely confirm logout only if OLT explicitly prompts on exit
+          if (str.toLowerCase().includes('confirm to logout')) {
+            try { stream.write('yes\n'); } catch {}
+          }
         });
 
         stream.on('close', () => {
@@ -70,28 +76,41 @@ export async function executeSSHCommands(device, commands = [], timeoutMs = 8000
         // Send initialization commands
         stream.write('terminal length 0\n');
 
-        // Send commands with gentle pacing so OLT terminal does not drop buffer
+        // Send commands with adaptive pacing so OLT terminal does not drop buffer
         const cmdList = Array.isArray(commands) ? commands : [commands];
         let cmdIdx = 0;
-        const intervalId = setInterval(() => {
+
+        const sendNext = () => {
+          if (isDone) return;
           if (cmdIdx < cmdList.length) {
-            stream.write(`${cmdList[cmdIdx]}\n`);
+            const cmd = cmdList[cmdIdx];
             cmdIdx++;
+            stream.write(`${cmd}\n`);
+
+            let delay = 220;
+            const trimmedCmd = cmd.trim();
+            if (trimmedCmd === 'write' || trimmedCmd === 'save') {
+              delay = 2500;
+            } else if (trimmedCmd.startsWith('reboot') || trimmedCmd.startsWith('restore factory')) {
+              delay = 600;
+            }
+            setTimeout(sendNext, delay);
           } else {
-            clearInterval(intervalId);
             setTimeout(() => {
-              // Read-only session: exit without saving any configuration changes
-              stream.write('exit\nyes\n');
+              // Disconnect session cleanly without sending unsolicited yes
+              stream.write('exit\n');
               setTimeout(() => {
                 if (!isDone) {
                   isDone = true;
                   cleanup();
                   resolve({ output, success: true });
                 }
-              }, 1200);
-            }, 600);
+              }, 1000);
+            }, 500);
           }
-        }, 180);
+        };
+
+        sendNext();
       });
     });
 

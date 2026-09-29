@@ -8,7 +8,6 @@ import * as logCtrl from '../controllers/log_controller.js';
 import * as topoCtrl from '../controllers/topology_controller.js';
 import * as integCtrl from '../controllers/integration_controller.js';
 import * as pollerCtrl from '../controllers/poller_controller.js';
-import * as mikrotikCtrl from '../controllers/mikrotik_controller.js';
 import * as loopCtrl from '../controllers/loop_controller.js';
 import { authenticateToken, requireRole } from '../middleware/auth.js';
 
@@ -94,10 +93,5 @@ router.get('/poller/status', pollerCtrl.getPollerStatus);
 router.post('/poller/toggle', requireRole('superadmin', 'noc_engineer'), pollerCtrl.togglePoller);
 router.post('/poller/run', requireRole('superadmin', 'noc_engineer'), pollerCtrl.triggerManualSweep);
 router.get('/events/stream', pollerCtrl.eventsStream);
-
-// MikroTik Core Router (PPPoE Secret Sync)
-router.get('/mikrotik/status', requireRole('superadmin', 'noc_engineer'), mikrotikCtrl.getStatus);
-router.get('/mikrotik/settings', requireRole('superadmin'), mikrotikCtrl.getSettings);
-router.post('/mikrotik/settings', requireRole('superadmin'), mikrotikCtrl.saveSettings);
 
 export default router;

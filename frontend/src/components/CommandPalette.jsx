@@ -87,7 +87,7 @@ export default function CommandPalette({
       type: 'action',
       category: 'Navigasi Menu',
       title: 'Buka Integrasi Sistem',
-      subtitle: 'ACS TR-069, MikroTik BRAS, Bot Notifikasi',
+      subtitle: 'ACS TR-069, Bot Notifikasi, Webhook',
       icon: <Settings size={15} />,
       action: () => { onNavigate('integrations'); onClose(); }
     },

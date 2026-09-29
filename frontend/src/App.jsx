@@ -36,6 +36,14 @@ export default function App() {
   const [showProvisionModal, setShowProvisionModal] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [provisioningSearchTerm, setProvisioningSearchTerm] = useState('');
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    return localStorage.getItem('nms_sidebar_collapsed') === 'true';
+  });
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem('nms_sidebar_collapsed', isSidebarCollapsed ? 'true' : 'false');
+  }, [isSidebarCollapsed]);
 
   // Global Ctrl + K / Cmd + K keyboard shortcut listener
   useEffect(() => {
@@ -187,12 +195,28 @@ export default function App() {
   }
 
   return (
-    <div className="app-container">
+    <div className={`app-container ${isSidebarCollapsed ? 'sidebar-is-collapsed' : ''}`}>
+      {/* Mobile Drawer Backdrop */}
+      {isMobileSidebarOpen && (
+        <div
+          className="sidebar-backdrop"
+          onClick={() => setIsMobileSidebarOpen(false)}
+          title="Tutup Menu"
+        />
+      )}
+
       <Sidebar
         activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        setActiveTab={(tab) => {
+          setActiveTab(tab);
+          setIsMobileSidebarOpen(false);
+        }}
         onLogout={handleLogout}
         currentUser={currentUser}
+        isCollapsed={isSidebarCollapsed}
+        onToggleCollapse={() => setIsSidebarCollapsed(prev => !prev)}
+        isMobileOpen={isMobileSidebarOpen}
+        onCloseMobile={() => setIsMobileSidebarOpen(false)}
       />
 
       <div className="main-content">
@@ -204,6 +228,9 @@ export default function App() {
           theme={theme}
           onToggleTheme={toggleTheme}
           onOpenCommandPalette={() => setIsCommandPaletteOpen(true)}
+          isSidebarCollapsed={isSidebarCollapsed}
+          onToggleSidebarCollapse={() => setIsSidebarCollapsed(prev => !prev)}
+          onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
         />
 
         <main className="page-body">
